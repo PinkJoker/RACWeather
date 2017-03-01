@@ -13,10 +13,21 @@
 @property (nonatomic, strong) UIImageView *blurredImageView;
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, assign) CGFloat screenHeight;
+@property (nonatomic, strong) NSDateFormatter *hourlyFormatter;
+@property (nonatomic, strong) NSDateFormatter *dailyFormatter;
 @end
 
 @implementation WXViewController
-
+- (id)init {
+    if (self = [super init]) {
+        _hourlyFormatter = [[NSDateFormatter alloc] init];
+        _hourlyFormatter.dateFormat = @"h a";
+        
+        _dailyFormatter = [[NSDateFormatter alloc] init];
+        _dailyFormatter.dateFormat = @"EEEE";
+    }
+    return self;
+}
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view.
@@ -108,7 +119,7 @@
     //1
     [[RACObserve([WXManager shareManager], currentCondition)
       //2
-      deliverOn:RACSchedulerPriorityDefault]subscribeNext:^(WXCondition *newCondition) {
+      deliverOn:[RACScheduler mainThreadScheduler]]subscribeNext:^(WXCondition *newCondition) {
         //3
         temperatureLabel.text = [NSString stringWithFormat:@"%.0f",newCondition.temperature.floatValue];
         conditionsLabel.text = [newCondition.condition capitalizedString];
@@ -131,7 +142,17 @@
     //告诉管理类 开始寻找当前位置
     [[WXManager shareManager]findCurrentLocation];
     
+    [[RACObserve([WXManager shareManager], hourlyForecast)
+      deliverOn:RACScheduler.mainThreadScheduler]
+     subscribeNext:^(NSArray *newForecast) {
+         [self.tableView reloadData];
+     }];
     
+    [[RACObserve([WXManager shareManager], dailyForecast)
+      deliverOn:RACScheduler.mainThreadScheduler]
+     subscribeNext:^(NSArray *newForecast) {
+         [self.tableView reloadData];
+     }];
     
 }
 
@@ -144,7 +165,13 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     // TODO: Return count of forecast
-    return 0;
+    // 1
+    if (section == 0) {
+        //使用最近6小时的预报，并添加一个作为页眉的单元格
+        return MIN([[WXManager shareManager].hourlyForecast count], 6) + 1;
+    }
+    // 使用最近六天的每日预报
+    return MIN([[WXManager shareManager].dailyForecast count], 6) + 1;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -154,7 +181,28 @@
     if (! cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:CellIdentifier];
     }
-    
+    if (indexPath.section == 0) {
+        // 1
+        if (indexPath.row == 0) {
+            [self configureHeaderCell:cell title:@"Hourly Forecast"];
+        }
+        else {
+            // 2
+            WXCondition *weather = [WXManager shareManager].hourlyForecast[indexPath.row - 1];
+            [self configureHourlyCell:cell weather:weather];
+        }
+    }
+    else if (indexPath.section == 1) {
+        // 1
+        if (indexPath.row == 0) {
+            [self configureHeaderCell:cell title:@"Daily Forecast"];
+        }
+        else {
+            // 3
+            WXCondition *weather = [WXManager shareManager].dailyForecast[indexPath.row - 1];
+            [self configureDailyCell:cell weather:weather]; 
+        } 
+    }
     // 3
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.backgroundColor = [UIColor colorWithWhite:0 alpha:0.2];
@@ -164,6 +212,35 @@
     // TODO: Setup the cell
     
     return cell;
+}
+// 1配置和添加文本到Section作为页眉
+- (void)configureHeaderCell:(UITableViewCell *)cell title:(NSString *)title {
+    cell.textLabel.font = [UIFont fontWithName:@"HelveticaNeue-Medium" size:18];
+    cell.textLabel.text = title;
+    cell.detailTextLabel.text = @"";
+    cell.imageView.image = nil;
+}
+
+// 2格式化逐时预报单元格
+- (void)configureHourlyCell:(UITableViewCell *)cell weather:(WXCondition *)weather {
+    cell.textLabel.font = [UIFont fontWithName:@"HelveticaNeue-Light" size:18];
+    cell.detailTextLabel.font = [UIFont fontWithName:@"HelveticaNeue-Medium" size:18];
+    cell.textLabel.text = [self.hourlyFormatter stringFromDate:weather.date];
+    cell.detailTextLabel.text = [NSString stringWithFormat:@"%.0f°",weather.temperature.floatValue];
+    cell.imageView.image = [UIImage imageNamed:[weather imageName]];
+    cell.imageView.contentMode = UIViewContentModeScaleAspectFit;
+}
+
+// 3格式化每日预报单元格
+- (void)configureDailyCell:(UITableViewCell *)cell weather:(WXCondition *)weather {
+    cell.textLabel.font = [UIFont fontWithName:@"HelveticaNeue-Light" size:18];
+    cell.detailTextLabel.font = [UIFont fontWithName:@"HelveticaNeue-Medium" size:18];
+    cell.textLabel.text = [self.dailyFormatter stringFromDate:weather.date];
+    cell.detailTextLabel.text = [NSString stringWithFormat:@"%.0f° / %.0f°",
+                                 weather.tempHigh.floatValue,
+                                 weather.tempLow.floatValue];
+    cell.imageView.image = [UIImage imageNamed:[weather imageName]];
+    cell.imageView.contentMode = UIViewContentModeScaleAspectFit;
 }
 - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
@@ -178,8 +255,24 @@
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     // TODO: Determine cell height based on screen
-    return 44;
-} 
+    NSInteger cellCount = [self tableView:tableView numberOfRowsInSection:indexPath.section];
+    return self.screenHeight / (CGFloat)cellCount;
+}
+//引入模糊效果
+/*
+ 1.获取滚动试图的高度和内容的偏移量，与0偏移量作比较，因此试图滚动table低于初始位置将不会影响模糊效果
+ 2.偏移量除以高度，并且最大值为1，所以alpha上线为1
+ 3.当你滚动的时候，把结果值付给模糊图像的alpha属性，进行更改模糊图像
+ */
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    // 1
+    CGFloat height = scrollView.bounds.size.height;
+    CGFloat position = MAX(scrollView.contentOffset.y, 0.0);
+    // 2
+    CGFloat percent = MIN(position / height, 1.0);
+    // 3
+    self.blurredImageView.alpha = percent;
+}
 -(UIStatusBarStyle)preferredStatusBarStyle
 {
     return UIStatusBarStyleLightContent;

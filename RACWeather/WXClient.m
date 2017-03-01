@@ -80,7 +80,7 @@
  */
 -(RACSignal *)fetchCurrentConditionsForLocation:(CLLocationCoordinate2D)coordinate
 {   // 1
-    NSString *urlString = [NSString stringWithFormat:@"http://samples.openweathermap.org/data/2.5/weather?lat=%f&lon=%f&appid=b1b15e88fa797225412429c1c50c122a1",coordinate.latitude,coordinate.longitude];
+    NSString *urlString = [NSString stringWithFormat:@"http://samples.openweathermap.org/data/2.5/weather?lat=%f&lon=%f&appid=f761dc2d5a52a5039a6c44e6fb248cc8",coordinate.latitude,coordinate.longitude];
     NSURL *url = [NSURL URLWithString:urlString];
     //2
     return [[self fetchJSONFromURL:url]map:^(NSDictionary *json) {

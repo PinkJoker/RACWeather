@@ -133,7 +133,7 @@ NSString * const MTLJSONAdapterThrownExceptionErrorKey = @"MTLJSONAdapterThrownE
 
 - (id)initWithModelClass:(Class)modelClass {
 	NSParameterAssert(modelClass != nil);
-	NSParameterAssert([modelClass conformsToProtocol:@protocol(MTLJSONSerializing)]);
+	//NSParameterAssert([modelClass conformsToProtocol:@protocol(MTLJSONSerializing)]);
 
 	self = [super init];
 	if (self == nil) return nil;
@@ -364,7 +364,7 @@ NSString * const MTLJSONAdapterThrownExceptionErrorKey = @"MTLJSONAdapterThrownE
 
 + (NSDictionary *)valueTransformersForModelClass:(Class)modelClass {
 	NSParameterAssert(modelClass != nil);
-	NSParameterAssert([modelClass conformsToProtocol:@protocol(MTLJSONSerializing)]);
+//	NSParameterAssert([modelClass conformsToProtocol:@protocol(MTLJSONSerializing)]);
 
 	NSMutableDictionary *result = [NSMutableDictionary dictionary];
 

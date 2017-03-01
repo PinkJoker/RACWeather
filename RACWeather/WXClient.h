@@ -9,7 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "WXDailyForecast.h"
 #import "WXCondition.h"
-@interface WXClient : NSObject
+@interface WXClient : NSObject<MTLJSONSerializing>
 @property (nonatomic, strong) NSDate *date;
 @property (nonatomic, strong) NSNumber *humidity;
 @property (nonatomic, strong) NSNumber *temperature;
